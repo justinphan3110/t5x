@@ -158,17 +158,20 @@ class BaseModel(abc.ABC):
         dropout_rng=None,
     )
 
-  def predict_batch(self, params: PyTreeDef,
-                    batch: Mapping[str, jnp.ndarray]) -> jnp.ndarray:
+  def predict_batch(self,
+                    params: PyTreeDef,
+                    batch: Mapping[str, jnp.ndarray],
+                    rng: Optional[jnp.ndarray] = None) -> jnp.ndarray:
     """Thin wrapper around `self.predict_batch_with_aux`."""
     # The first element of the return value is the predicted sequences.
-    return self.predict_batch_with_aux(params, batch)[0]
+    return self.predict_batch_with_aux(params=params, batch=batch, rng=rng)[0]
 
   @abc.abstractmethod
   def predict_batch_with_aux(
       self,
       params: PyTreeDef,
       batch: Mapping[str, jnp.ndarray],
+      rng: Optional[jnp.ndarray] = None,
   ) -> Tuple[jnp.ndarray, Mapping[str, jnp.ndarray]]:
     """Predicts batch with auxiliary outputs."""
     pass
@@ -465,6 +468,7 @@ class EncoderDecoderModel(BaseTransformerModel):
       self,
       params: PyTreeDef,
       batch: Mapping[str, jnp.ndarray],
+      rng: Optional[jnp.ndarray] = None,
       decoder_params: Optional[MutableMapping[str, Any]] = None,
       return_all_decodes: bool = False,
       num_decodes: int = 1,
@@ -554,6 +558,9 @@ class EncoderDecoderModel(BaseTransformerModel):
 
     if decoder_params is None:
       decoder_params = {}
+    assert not (rng is not None and
+                decoder_params.get('decode_rng') is not None)
+    decoder_params['decode_rng'] = rng
 
     # For beam search, `decoder_prompt_inputs` is only used to obtain batch size
     # and max decode length information. For temperature sampling,
@@ -776,6 +783,7 @@ class DecoderOnlyModel(BaseTransformerModel):
       self,
       params: PyTreeDef,
       batch: Mapping[str, jnp.ndarray],
+      rng: Optional[jnp.ndarray] = None,
       *,
       return_all_decodes: bool = False,
       num_decodes: int = 1,
@@ -939,6 +947,9 @@ class DecoderOnlyModel(BaseTransformerModel):
 
     if decoder_params is None:
       decoder_params = {}
+    assert not (rng is not None and
+                decoder_params.get('decode_rng') is not None)
+    decoder_params['decode_rng'] = rng
 
     # Using the above-defined single-step decoder function, run temperature
     # sampling with the prefix.
